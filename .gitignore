@@ -1,0 +1,19 @@
+# Compiled source and libraries
+*.o
+*.a
+*.so
+*.dll
+*.exe
+*.obj
+*.lib
+*log
+*sdf
+
+
+
+# emacs temp files
+*~
+
+
+
+
