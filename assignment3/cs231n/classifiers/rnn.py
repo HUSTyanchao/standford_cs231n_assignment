@@ -135,7 +135,54 @@ class CaptioningRNN(object):
     # defined above to store loss and gradients; grads[k] should give the      #
     # gradients for self.params[k].                                            #
     ############################################################################
-    pass
+    # https://github.com/cthorey/CS231/blob/master/assignment3/cs231n/classifiers/rnn.py
+    # step (1)
+    h0 = np.dot(features, W_proj) + b_proj
+    # step (2)
+    x, cache_embed = word_embedding_forward(captions_in, W_embed)
+    # step (3)
+    if self.cell_type == 'rnn':
+        h, cache_rnn = rnn_forward(x, h0, Wx, Wh, b)
+    elif self.cell_type == 'lstm':
+        h, cache_rnn = lstm_forward(x, h0, Wx, Wh, b)
+    else:
+        raise ValueError('%s not implemented' % (self.cell_type))
+
+    # step (4)
+    scores, cache_scores = temporal_affine_forward(h, W_vocab, b_vocab)
+    # step (5)
+    loss, dscores = temporal_softmax_loss(scores, captions_out, mask, verbose=False)
+
+    # Backward
+    grads = dict.fromkeys(self.params)
+
+    # backward into step 4
+    dh, dW_vocab, db_vocab = temporal_affine_backward(dscores, cache_scores)
+
+    # backward into step 3
+    if self.cell_type == 'rnn':
+        dx, dh0, dWx, dWh, db = rnn_backward(dh, cache_rnn)
+    elif self.cell_type == 'lstm':
+        dx, dh0, dWx, dWh, db = lstm_backward(dh, cache_rnn)
+    else:
+        raise ValueError('%s not implemented' % (self.cell_type))
+
+    # backward into step 2
+    dW_emded = word_embedding_backward(dx, cache_embed)
+
+    # backward into step 1
+    dW_proj = np.dot(features.T, dh0)
+    db_proj = np.sum(dh0, axis=0)
+
+    grads['W_proj'] = dW_proj
+    grads['b_proj'] = db_proj
+    grads['W_embed'] = dW_emded
+    grads['Wx'] = dWx
+    grads['Wh'] = dWh
+    grads['b'] = db
+    grads['W_vocab'] = dW_vocab
+    grads['b_vocab'] = db_vocab
+
     ############################################################################
     #                             END OF YOUR CODE                             #
     ############################################################################
@@ -197,7 +244,35 @@ class CaptioningRNN(object):
     # functions; you'll need to call rnn_step_forward or lstm_step_forward in #
     # a loop.                                                                 #
     ###########################################################################
-    pass
+    # https://github.com/cthorey/CS231/blob/master/assignment3/cs231n/classifiers/rnn.py
+    # get first hidden state
+    h0 = np.dot(features, W_proj) + b_proj 
+
+    captions[:,0] = self._start
+    prev_h = h0;
+    prev_c = np.zeros_like(h0)
+    capt = self._start * np.ones((N,1), dtype=np.int32)
+
+    for t in xrange(max_length):
+        word_emded, _ = word_embedding_forward(capt, W_embed)
+        if self.cell_type == 'rnn':
+            h, _ = rnn_step_forward(np.squeeze(word_emded), prev_h, Wx, Wh, b)
+        elif self.cell_type == 'lstm':
+            h, c, _ = lstm_step_forward(np.squeeze(word_emded), prev_h, prev_c, Wx, Wh, b) 
+        else:
+            raise ValueError('%s not implemented' % (self.cell_type))
+
+        # compute the score distrib over the dictionary
+        scores, _ = temporal_affine_forward(h[:, np.newaxis, :], W_vocab, b_vocab)
+
+        idx_best = np.squeeze( np.argmax(scores, axis=2))
+        captions[:, t] = idx_best
+
+        prev_h = h
+        if self.cell_type == 'lstm':
+            prev_c = c
+        capt = captions[:, t]
+        
     ############################################################################
     #                             END OF YOUR CODE                             #
     ############################################################################
