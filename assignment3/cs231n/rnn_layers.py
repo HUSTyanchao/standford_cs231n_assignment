@@ -378,6 +378,7 @@ def lstm_forward(x, h0, Wx, Wh, b):
   cache = []
   for t in xrange(T):
     h[:,t,:], c[:,t,:], cache_t = \
+      
       lstm_step_forward(x[:,t,:], h[:,t-1,:].copy(), c[:,t-1,:].copy(), Wx, Wh, b)
     cache.append(cache_t)
 
